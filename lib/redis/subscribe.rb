@@ -29,12 +29,24 @@ class Redis
       subscription("psubscribe", "punsubscribe", channels, block, timeout)
     end
 
+    def ssubscribe(*channels, &block)
+      subscription("ssubscribe", "sunsubscribe", channels, block)
+    end
+
+    def ssubscribe_with_timeout(timeout, *channels, &block)
+      subscription("ssubscribe", "sunsubscribe", channels, block, timeout)
+    end
+
     def unsubscribe(*channels)
       call_v([:unsubscribe, *channels])
     end
 
     def punsubscribe(*channels)
       call_v([:punsubscribe, *channels])
+    end
+
+    def sunsubscribe(*channels)
+      call_v([:sunsubscribe, *channels])
     end
 
     def close
@@ -93,6 +105,18 @@ class Redis
 
     def pmessage(&block)
       @callbacks["pmessage"] = block
+    end
+
+    def ssubscribe(&block)
+      @callbacks["ssubscribe"] = block
+    end
+
+    def sunsubscribe(&block)
+      @callbacks["sunsubscribe"] = block
+    end
+
+    def smessage(&block)
+      @callbacks["smessage"] = block
     end
   end
 end
