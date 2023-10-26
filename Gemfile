@@ -10,3 +10,4 @@ gem 'rubocop', '~> 1.25.1'
 gem 'mocha'
 
 gem 'hiredis-client'
+gem 'redis-client', github: 'redis-rb/redis-client', branch: 'master'
