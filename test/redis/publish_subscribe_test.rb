@@ -103,6 +103,43 @@ class TestPublishSubscribe < Minitest::Test
     assert_equal "s1", @message
   end
 
+  def test_ssubscribe_and_sunsubscribe
+    @subscribed = false
+    @unsubscribed = false
+
+    thread = new_thread do |r|
+      r.ssubscribe(channel_name) do |on|
+        on.ssubscribe do |_channel, total|
+          @subscribed = true
+          @t1 = total
+        end
+
+        on.smessage do |_channel, message|
+          if message == "s1"
+            r.sunsubscribe
+            @message = message
+          end
+        end
+
+        on.sunsubscribe do |_channel, total|
+          @unsubscribed = true
+          @t2 = total
+        end
+      end
+    end
+
+    # Wait until the subscription is active before publishing
+    Thread.pass until @subscribed
+    redis.spublish(channel_name, "s1")
+    thread.join
+
+    assert @subscribed
+    assert_equal 1, @t1
+    assert @unsubscribed
+    assert_equal 0, @t2
+    assert_equal "s1", @message
+  end
+
   def test_pubsub_with_channels_and_numsub_subcommnads
     @subscribed = false
     thread = new_thread do |r|
@@ -170,6 +207,32 @@ class TestPublishSubscribe < Minitest::Test
     Thread.pass until @subscribed
 
     redis.publish(channel_name, "s1")
+
+    thread.join
+
+    assert_equal "PONG", r.ping
+  end
+
+  def test_ssubscribe_connection_usable_after_raise
+    @subscribed = false
+
+    thread = new_thread do |r|
+      r.ssubscribe(channel_name) do |on|
+        on.ssubscribe do |_channel, _total|
+          @subscribed = true
+        end
+
+        on.smessage do |_channel, _message|
+          raise TestError
+        end
+      end
+    rescue TestError
+    end
+
+    # Wait until the subscription is active before publishing
+    Thread.pass until @subscribed
+
+    redis.spublish(channel_name, "s1")
 
     thread.join
 
@@ -259,6 +322,18 @@ class TestPublishSubscribe < Minitest::Test
     received = false
 
     r.psubscribe_with_timeout(LOW_TIMEOUT, "channel:*") do |on|
+      on.message do |_channel, _message|
+        received = true
+      end
+    end
+
+    refute received
+  end
+
+  def test_ssubscribe_with_timeout
+    received = false
+
+    r.ssubscribe_with_timeout(LOW_TIMEOUT, 'channel') do |on|
       on.message do |_channel, _message|
         received = true
       end

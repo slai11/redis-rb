@@ -8,6 +8,11 @@ class Redis
         send_command([:publish, channel, message])
       end
 
+      # Post a sharded pub/sub message to a channel.
+      def spublish(channel, message)
+        send_command([:spublish, channel, message])
+      end
+
       def subscribed?
         !@subscription_client.nil?
       end
@@ -42,6 +47,22 @@ class Redis
       # Stop listening for messages posted to channels matching the given patterns.
       def punsubscribe(*channels)
         _subscription(:punsubscribe, 0, channels, nil)
+      end
+
+      # Listen for sharded pub/sub messages published to the given channels.
+      def ssubscribe(*channels, &block)
+        _subscription(:ssubscribe, 0, channels, block)
+      end
+
+      # Listen for sharded pub/sub messages published to channels.
+      # Throw a timeout error if there is no messages for a timeout period.
+      def ssubscribe_with_timeout(timeout, *channels, &block)
+        _subscription(:ssubscribe_with_timeout, timeout, channels, block)
+      end
+
+      # Stop listening for sharded pub/sub messages posted to the given channels.
+      def sunsubscribe(*channels)
+        _subscription(:sunsubscribe, 0, channels, nil)
       end
 
       # Inspect the state of the Pub/Sub subsystem.

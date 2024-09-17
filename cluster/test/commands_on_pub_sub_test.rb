@@ -105,4 +105,49 @@ class TestClusterCommandsOnPubSub < Minitest::Test
     assert_equal('one', messages['channel1'])
     assert_equal('two', messages['channel2'])
   end
+
+  def test_spublish_ssubscribe_sunsubscribe_pubsub
+    sub_cnt = 0
+    messages = {}
+
+    thread = Thread.new do
+      redis.ssubscribe('{channel}1', '{channel}2') do |on|
+        on.ssubscribe { |_c, t| sub_cnt = t }
+        on.sunsubscribe { |_c, t| sub_cnt = t }
+        on.smessage do |chn, msg|
+          messages[chn] = msg
+          # FIXME: blocking occurs when `unsubscribe` method was called with channel arguments
+          redis.sunsubscribe if messages.size == 2
+        end
+      end
+    end
+
+    Thread.pass until sub_cnt == 2
+
+    publisher = build_another_client
+
+    assert_equal [], publisher.pubsub(:channels)
+    assert_equal [], publisher.pubsub(:channels, '{channel}1')
+    assert_equal [], publisher.pubsub(:channels, '{channel}2')
+    assert_equal [], publisher.pubsub(:channels, '{channel}3')
+    assert_equal({}, publisher.pubsub(:numsub))
+    assert_equal({ '{channel}1' => 0, '{channel}2' => 0, '{channel}3' => 0 },
+                 publisher.pubsub(:numsub, '{channel}1', '{channel}2', '{channel}3'))
+
+    publisher.spublish('{channel}1', 'one')
+    publisher.spublish('{channel}2', 'two')
+    publisher.spublish('{channel}3', 'three')
+
+    thread.join
+
+    assert_equal({ '{channel}1' => 'one', '{channel}2' => 'two' }, messages.sort.to_h)
+
+    assert_equal [], publisher.pubsub(:channels)
+    assert_equal [], publisher.pubsub(:channels, '{channel}1')
+    assert_equal [], publisher.pubsub(:channels, '{channel}2')
+    assert_equal [], publisher.pubsub(:channels, '{channel}3')
+    assert_equal({}, publisher.pubsub(:numsub))
+    assert_equal({ '{channel}1' => 0, '{channel}2' => 0, '{channel}3' => 0 },
+                 publisher.pubsub(:numsub, '{channel}1', '{channel}2', '{channel}3'))
+  end
 end
